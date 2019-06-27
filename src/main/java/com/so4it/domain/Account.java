@@ -5,9 +5,9 @@ import java.util.Objects;
 public class Account {
 
     //
-    private Long id;
+    private long id;
 
-    private Double balance;
+    private double balance;
 
     public Account(Builder builder) {
         this.id = Objects.requireNonNull(builder.id);
@@ -20,6 +20,12 @@ public class Account {
 
     public Double getBalance() {
         return balance;
+    }
+
+
+    @Override
+    public String toString() {
+        return "Account{id=" + id + ", balance=" + balance + '}';
     }
 
     public static Builder builder(){

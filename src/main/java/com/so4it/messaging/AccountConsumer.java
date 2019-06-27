@@ -2,35 +2,69 @@ package com.so4it.messaging;
 
 import com.so4it.dao.AccountDao;
 import com.so4it.domain.Account;
+import com.so4it.util.NamedThreadFactory;
+import com.so4it.util.RecurringBlockingTask;
 
+import java.util.List;
 import java.util.Objects;
-import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Logger;
 
-public class AccountConsumer implements Runnable {
+public class AccountConsumer implements AutoCloseable {
 
-    private BlockingQueue<Account> accounts;
 
-    private AccountDao accountDao;
+    private static final Logger LOGGER = Logger.getLogger("consumer");
 
-    public AccountConsumer(BlockingQueue<Account> accounts,
-                           AccountDao accountDao) {
-        this.accounts = Objects.requireNonNull(accounts,"Accounts cannot be null");
-        this.accountDao = Objects.requireNonNull(accountDao,"Account DAO cannot be null");
+
+    private RunningTask runningTask;
+
+    final private BlockingQueue<Account> queue;
+
+    final private List<AccountListener> accountListeners = new CopyOnWriteArrayList<>();
+
+    public AccountConsumer(BlockingQueue<Account> queue,
+                           List<AccountListener> accountListeners) {
+        this.queue = Objects.requireNonNull(queue,"Accounts cannot be null");
+        this.accountListeners.addAll(Objects.requireNonNull(accountListeners,"Accountlistners cannot be null"));
+    }
+
+    public AccountConsumer init(){
+        runningTask = new RunningTask(queue,accountListeners);
+        runningTask.start();
+        return this;
     }
 
     @Override
-    public void run() {
-        while(!Thread.interrupted()){
-            try {
-                Account account = accounts.poll(100L, TimeUnit.MILLISECONDS);
-                if(account != null){
-                    //@TODO Do something async on the account
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+    public void close() throws Exception {
+        runningTask.close();
+    }
+
+    public static class RunningTask extends RecurringBlockingTask<Account> {
+
+        private final List<AccountListener> accountListeners;
+
+
+        public RunningTask(BlockingQueue<Account> queue,List<AccountListener> accountListeners) {
+            super(new NamedThreadFactory("consumer-thread-"), queue);
+            this.accountListeners = Objects.requireNonNull(accountListeners,"accountListeners");
+        }
+
+        @Override
+        protected void doTask(Account account) {
+            accountListeners.forEach(listener -> listener.onAccount(account));
+        }
+
+
+        @Override
+        protected void onError(Throwable throwable, Account account) {
+            LOGGER.severe(throwable.getMessage());
+            //LOGGER.severe(throwable.getMessage() + account != null ? ",on Id " + account.getId() : "");
+        }
+
+        @Override
+        protected long getBackoff() {
+            return 500L;
         }
     }
 }

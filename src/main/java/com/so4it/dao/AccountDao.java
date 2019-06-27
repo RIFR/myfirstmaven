@@ -11,7 +11,6 @@ public interface AccountDao {
 
     Optional<Account> read(Long id);
 
-
     Collection<Account> readAccountsWithBalanceOver(Double limit);
 
 }
